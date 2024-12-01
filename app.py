@@ -6,25 +6,28 @@ import pandas as pd
 from collections import Counter
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D
-import base64
 
 # Reading the music dataset
 df = pd.read_csv("C:\\Users\\lavan\\Desktop\\coding\\Emotion-based-music-recommendation-system-main\\music_info.csv")
 
 # Renaming columns to be more meaningful
-df['link'] = df['lastfm_url']
-df['name'] = df['track']
+if 'lastfm_url' in df.columns:
+    df['link'] = df['lastfm_url']
+else:
+    st.error("The 'lastfm_url' column is missing in the dataset. Please verify your dataset.")
+
+if 'track' in df.columns:
+    df['name'] = df['track']
+else:
+    st.error("The 'track' column is missing in the dataset. Please verify your dataset.")
+
 df['emotional'] = df['number_of_emotion_tags']
 df['pleasant'] = df['valence_tags']
 
 # Selecting the relevant columns for analysis
-df = df[['name','emotional','pleasant','link','artist']]
-print(df)
-
-# Sorting data based on emotional and pleasant values
+df = df[['name', 'emotional', 'pleasant', 'link', 'artist']]
 df = df.sort_values(by=["emotional", "pleasant"])
-df.reset_index()
-print(df)
+df.reset_index(drop=True, inplace=True)
 
 # Splitting the data based on different emotions
 df_sad = df[:18000]
@@ -33,254 +36,143 @@ df_angry = df[36000:54000]
 df_neutral = df[54000:72000]
 df_happy = df[72000:]
 
+
 # Function that filters music based on the user's detected emotions
 def fun(list):
     data = pd.DataFrame()
+    emotion_map = {
+        'Neutral': df_neutral,
+        'Angry': df_angry,
+        'fear': df_fear,
+        'happy': df_happy,
+        'Sad': df_sad,
+    }
+    sample_sizes = {
+        1: [30],
+        2: [30, 20],
+        3: [55, 20, 15],
+        4: [30, 29, 18, 9],
+        5: [10, 7, 6, 5, 2],
+    }
 
-    # Logic for selecting tracks based on a single emotion
-    if len(list) == 1:
-        v = list[0]
-        t = 30
-        if v == 'Neutral':
-            data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-        elif v == 'Angry':
-            data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-        elif v == 'fear':
-            data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-        elif v == 'happy':
-            data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-        else:
-            data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
+    for emotion, size in zip(list, sample_sizes.get(len(list), [10])):
+        data = pd.concat([data, emotion_map.get(emotion, df_sad).sample(n=size)], ignore_index=True)
 
-    # Logic for selecting tracks based on two emotions
-    elif len(list) == 2:
-        times = [30,20]
-        for i in range(len(list)):
-            v = list[i]
-            t = times[i]
-            if v == 'Neutral':
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:
-               data = pd.concat([df_sad.sample(n=t)])
-
-    # Logic for selecting tracks based on three emotions
-    elif len(list) == 3:
-        times = [55,20,15]
-        for i in range(len(list)):
-            v = list[i]
-            t = times[i]
-            if v == 'Neutral':
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:
-                data = pd.concat([df_sad.sample(n=t)])
-
-    # Logic for selecting tracks based on four emotions
-    elif len(list) == 4:
-        times = [30,29,18,9]
-        for i in range(len(list)):
-            v = list[i]
-            t = times[i]
-            if v == 'Neutral':
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:
-               data = pd.concat([df_sad.sample(n=t)])
-
-    # Logic for selecting tracks based on five emotions
-    else:
-        times = [10,7,6,5,2]
-        for i in range(len(list)):
-            v = list[i]
-            t = times[i]
-            if v == 'Neutral':
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:
-                data = pd.concat([df_sad.sample(n=t)])
-
-    print("data of list func... :",data)
     return data
+
 
 # Function to process and return a list of unique emotions in order of occurrence
 def pre(l):
-    emotion_counts = Counter(l)
-    result = []
-    for emotion, count in emotion_counts.items():
-        result.extend([emotion] * count)
-    print("Processed Emotions:", result)
-
     ul = []
-    for x in result:
+    for x in l:
         if x not in ul:
             ul.append(x)
-            print(result)
-    print("Return the list of unique emotions in the order of occurrence frequency :",ul)
     return ul
 
-# Building the CNN model for emotion detection
-model = Sequential()
-model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48,48,1)))
-model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(1024, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(7, activation='softmax'))
 
-# Load the pre-trained weights for emotion detection
+# Building the CNN model for emotion detection
+model = Sequential([
+    Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48, 48, 1)),
+    Conv2D(64, kernel_size=(3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    Conv2D(128, kernel_size=(3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    Conv2D(128, kernel_size=(3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    Dropout(0.25),
+    Flatten(),
+    Dense(1024, activation='relu'),
+    Dropout(0.5),
+    Dense(7, activation='softmax')
+])
+
+# Load pre-trained weights for emotion detection
 model.load_weights('C:\\Users\\lavan\\Desktop\\coding\\Emotion-based-music-recommendation-system-main\\model.h5')
 
-# Dictionary mapping the indices to emotion labels
+# Map indices to emotion labels
 emotion_dict = {0: "Angry", 1: "Disgusted", 2: "Fearful", 3: "Happy", 4: "Neutral", 5: "Sad", 6: "Surprised"}
 
 # Set up OpenCV to avoid using OpenCL
 cv2.ocl.setUseOpenCL(False)
 
-# Initialize webcam for emotion detection
-cap = cv2.VideoCapture(0)
-
-# Load the Haarcascade Classifier for face detection
-print("Loading Haarcascade Classifier...")
-face = cv2.CascadeClassifier('C:\\Users\\lavan\\Desktop\\coding\\Emotion-based-music-recommendation-system-main\\haarcascade_frontalface_default.xml')
+# Load Haarcascade Classifier for face detection
+face = cv2.CascadeClassifier(
+    'C:\\Users\\lavan\\Desktop\\coding\\Emotion-based-music-recommendation-system-main\\haarcascade_frontalface_default.xml')
 if face.empty():
     print("Haarcascade Classifier failed to load.")
 else:
     print("Haarcascade Classifier loaded successfully.")
 
-# Setting the background image for the Streamlit app
+# Streamlit UI Setup
 page_bg_img = '''
 <style>
 body {
     background-image: url("https://images.unsplash.com/photo-1542281286-9e0a16bb7366");
     background-size: cover;
-    font-family: 'Arial', sans-serif;
     color: #FFFFFF;
 }
 </style>
 '''
 st.markdown(page_bg_img, unsafe_allow_html=True)
 
-# Display the title and description for the app
-st.markdown("<h2 style='text-align: center; color: #C71585; font-family: Times New Roman, serif; font-size: 50px;'><b>★ Moodify ★</b></h2>", unsafe_allow_html=True)
-st.markdown("<h3 style='text-align: center; color: #FFB533; font-family: Times New Roman, serif; font-size: 40px;'><b>Music Tailored to Your Emotions</b></h3>", unsafe_allow_html=True)
-st.markdown("<h5 style='text-align: center; color: #FFB533 ; font-family: Times New Roman, serif; font-size: 25px;'><b>Click on the name of recommended song to reach website</b></h5>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #C71585;'>★ Moodify ★</h2>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #FFB533;'>Music Tailored to Your Emotions</h3>",
+            unsafe_allow_html=True)
 
-# Create a three-column layout for the user interface
-col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])  # The middle column is given more space
+col1, col2, col3, col4, col5 = st.columns(5)
 list = []
 
-# Place the "Scan Me" button in
 with col3:
     if st.button('Scan Me'):
         count = 0
-        list.clear()  # Clear the emotion list before starting
+        list.clear()
+        cap = cv2.VideoCapture(0)  # Initialize the webcam
 
-        # Your existing code for button action goes here
-        while True:
-            ret, frame = cap.read()  # Capture frame from webcam
+        # Check if the webcam is opened correctly
+        if not cap.isOpened():
+            st.error("Webcam is not accessible. Please check your webcam settings.")
+            st.stop()
+
+        while count < 20:
+            ret, frame = cap.read()  # Capture frame from the webcam
             if not ret:
+                st.error("Failed to capture frame from webcam.")
                 break
-            # Convert the image to grayscale for face detection
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            # Detect faces using the Haarcascade classifier
             faces = face.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
-            count = count + 1  # Increment the count of frames processed
-
-            # Loop through each detected face
             for (x, y, w, h) in faces:
-                # Draw rectangle around the face
-                cv2.rectangle(frame, (x, y - 50), (x + w, y + h + 10), (255, 0, 0), 2)
-                roi_gray = gray[y:y + h, x:x + w]  # Extract region of interest (face)
-                # Preprocess the face image for emotion prediction
+                roi_gray = gray[y:y + h, x:x + w]
                 cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0)
-                # Predict the emotion using the pre-trained model
                 prediction = model.predict(cropped_img)
-                max_index = int(np.argmax(prediction))  # Get the emotion with the highest probability
-
-                # Append the predicted emotion to the list
+                max_index = int(np.argmax(prediction))
                 list.append(emotion_dict[max_index])
 
-                # Display the predicted emotion on the webcam feed
-                cv2.putText(frame, emotion_dict[max_index], (x + 20, y - 60),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            count += 1
 
-                # Show the webcam feed with the face rectangles and emotion labels
-                cv2.imshow('Video', cv2.resize(frame, (1000, 700), interpolation=cv2.INTER_CUBIC))
-
-            # Exit if the user presses the 's' key
-            if cv2.waitKey(1) & 0xFF == ord('s'):
-                break
-            # Stop after processing 20 frames
-            if count >= 20:
-                break
         cap.release()  # Release the webcam
-        cv2.destroyAllWindows()  # Close the webcam feed window
+        cv2.destroyAllWindows()  # Close any OpenCV windows
 
-        # Process the emotion list and remove duplicates while maintaining order
-        list = pre(list)
-        # Display a success message on Streamlit app
-        st.success("Emotions successfully detected")
+        if not list:
+            st.warning("No emotions detected. Please try again.")
+        else:
+            list = pre(list)  # Process emotions
+            st.success("Emotions successfully detected.")
 
-    # When emotions are detected, recommend tracks based on the detected emotions
 new_df = fun(list)
 
-# Empty space for layout
-st.write("")
+if new_df.empty:
+    st.error("Press Scan me for recommendations")
+else:
+    st.write("Preview of some recommended songs:")
+    st.write(new_df[['name', 'artist']].head())  # Display only 'name' and 'artist' columns
 
-# Display a header for the recommended tracks
-st.markdown(
-    "<h5 style='text-align: center; color: #FFB533;font-family: Times New Roman, serif; '><b>For suggested tracks featuring artist names</b></h5>",
-    unsafe_allow_html=True)
-st.write(
-    "---------------------------------------------------------------------------------------------------------------------")
-
-# Try block to avoid errors when displaying recommendations
-try:
-    # Loop through the recommended data and display track information
-    for l, a, n, i in zip(new_df["link"], new_df['artist'], new_df['name'], range(30)):
-        # Display the track name as a clickable link
-        st.markdown("""
-            <h4 style='text-align: center;'>
-                <a href={style="color: #FF5733; font-family: Times New Roman, serif; font-size: 22px;"}>
-                    {} - {}
-                </a>
-            </h4>
-            """.format(l, i + 1, n), unsafe_allow_html=True)
-
-        # Display the artist name below the track name
-        st.markdown(
-            "<h5 style='text-align: center; color: #FFB533; font-family: Times New Roman, serif; font-size: 18px;'><i>{}</i></h5>".format(
-                a), unsafe_allow_html=True)
-
-        # Display a separator between tracks
-        st.write(
-            "---------------------------------------------------------------------------------------------------------------------")
-except:
-    pass  # If there are any errors (e.g., no recommendations), silently pass
+    try:
+        for l, a, n, i in zip(new_df["link"], new_df['artist'], new_df['name'], range(30)):
+            st.markdown(f"""
+                <h4 style='text-align: center;'>
+                    <a href="{l}" style="color: #FF5733;" target="_blank">{i + 1}. {n}</a>
+                </h4>
+            """, unsafe_allow_html=True)
+            st.markdown(f"<h5 style='text-align: center; color: #FFB533;'><i>{a}</i></h5>", unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
